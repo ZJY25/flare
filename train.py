@@ -15,10 +15,11 @@ from DataPro.data import get_training_data, get_validation_data
 from warmup_scheduler import GradualWarmupScheduler
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
-from models.UFT import UFCNet
 from utils.utils import ASLloss,ColorLoss,Blur,L1_Charbonnier_loss,img_pad,calculate_metrics,SSIM_loss,VGGLoss
 import lpips
 import warnings
+from models.UFT import FSNet
+from models.Net import Net
 # from lightning.fabric import Fabric
 warnings.filterwarnings("ignore")
 
@@ -44,7 +45,7 @@ OPT = opt['TRAINOPTIM']
 
 ## Model
 print('==> Build the model')
-model_restored = UFCNet()
+model_restored = Net()
 p_number = network_parameters(model_restored)
 model_restored.cuda()
 
@@ -148,15 +149,17 @@ for epoch in range(start_epoch, OPT['EPOCHS'] + 1):
     train_id = 1
 
     model_restored.train()
+    print(len(train_loader))
     for i, data in enumerate(train_loader, 0):
         # Forward propagation
         # for param in model_restored.parameters():
         #     param.grad = None
+        print(i)
         optimizer.zero_grad()
         target = data[0].cuda()
         input_ = data[1].cuda()
         flare_mask = data[2].cuda()
-        masked,restored = model_restored(input_)
+        masked, restored = model_restored(input_)
 
         # Compute loss
         charl1 = Charloss(restored, target)
@@ -170,14 +173,20 @@ for epoch in range(start_epoch, OPT['EPOCHS'] + 1):
         # # color_loss = cl(blur_rgb(restored), blur_rgb(target))
         # vgg_loss_mask = Vgg_loss(restored * (flare_mask), target * (flare_mask))
         # loss_mask = charl1_mask + ssim_loss_mask + 0.01 * vgg_loss_mask  # 损失函数
-        loss_mask = structure_loss(masked, 1-flare_mask)
+        # loss_mask = structure_loss(masked, 1-flare_mask)
 
-        loss = loss_total + 0.01 * loss_mask
+        # loss = loss_total + 0.01 * loss_mask
+        loss = loss_total
+
         # fabric.backward(loss)
         loss.backward()
         optimizer.step()
-        epoch_mask_loss += 0.1 * loss_mask.item()
+
+        # epoch_mask_loss += 0.1 * loss_mask.item()
+
+
         epoch_loss += loss.item()
+
         epoch_total_loss += loss_total.item()
     ## Evaluation (Validation)
     if epoch % Train['VAL_AFTER_EVERY'] == 0:
